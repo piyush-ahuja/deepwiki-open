@@ -39,6 +39,7 @@ class TestDataPipelineFineTuning(unittest.TestCase):
         # Mock configurations if necessary
         cls.original_text_splitter_config = configs.get("text_splitter")
         # Ensure a small chunk size for testing RAG path splitting
+        cls.original_fine_tuning_default = configs.get('fine_tuning_data_prep_default')
         configs["text_splitter"] = {"split_by": "word", "chunk_size": 10, "chunk_overlap": 2} 
 
     @classmethod
@@ -49,6 +50,12 @@ class TestDataPipelineFineTuning(unittest.TestCase):
         else:
             if "text_splitter" in configs:
                 del configs["text_splitter"]
+        
+        if cls.original_fine_tuning_default is None:
+            if 'fine_tuning_data_prep_default' in configs:
+                del configs['fine_tuning_data_prep_default']
+        else:
+            configs['fine_tuning_data_prep_default'] = cls.original_fine_tuning_default
         
         if cls.original_adalflow_root is None:
             del os.environ["ADALFLOW_ROOT_PATH"]
@@ -75,6 +82,9 @@ class TestDataPipelineFineTuning(unittest.TestCase):
     @patch('api.data_pipeline.TextSplitter')
     def test_processing_for_rag_default(self, MockTextSplitter, MockToEmbeddings, MockOllamaProcessor):
         # Test default behavior (chunk_for_fine_tuning=False)
+        # Explicitly set for this test to ensure RAG path regardless of JSON default
+        configs['fine_tuning_data_prep_default'] = False
+
         mock_splitter_instance = MockTextSplitter.return_value
         mock_embedder_instance = MockToEmbeddings.return_value
         
@@ -115,6 +125,9 @@ class TestDataPipelineFineTuning(unittest.TestCase):
     @patch('api.data_pipeline.TextSplitter')
     def test_processing_for_fine_tuning_true(self, MockTextSplitter, MockToEmbeddings, MockOllamaProcessor):
         # Test behavior with chunk_for_fine_tuning=True
+        # Explicitly set for this test to ensure fine-tuning path
+        configs['fine_tuning_data_prep_default'] = True
+
         db_manager = DatabaseManager()
         db_manager.repo_paths = {
             "save_repo_dir": TEST_REPO_PATH,
@@ -156,6 +169,101 @@ class TestDataPipelineFineTuning(unittest.TestCase):
         pipeline = prepare_data_pipeline(local_ollama=False, chunk_for_fine_tuning=True)
         self.assertIsInstance(pipeline, Sequential)
         self.assertEqual(len(pipeline.steps), 0) # Should be empty
+
+    @patch('api.data_pipeline.OllamaDocumentProcessor')
+    @patch('api.data_pipeline.ToEmbeddings')
+    @patch('api.data_pipeline.TextSplitter')
+    def test_behavior_with_json_default_true(self, MockTextSplitter, MockToEmbeddings, MockOllamaProcessor):
+        configs['fine_tuning_data_prep_default'] = True
+        db_manager = DatabaseManager()
+        db_manager.repo_paths = {
+            "save_repo_dir": TEST_REPO_PATH,
+            "save_db_file": TEST_DB_PATH
+        }
+        # Call prepare_db_index WITHOUT chunk_for_fine_tuning, relying on default from configs
+        processed_docs_objects = db_manager.prepare_db_index(local_ollama=False)
+
+        MockTextSplitter.assert_not_called()
+        MockToEmbeddings.assert_not_called()
+        MockOllamaProcessor.assert_not_called()
+        self.assertNotIn("split_and_embed", db_manager.db.transformers)
+        self.assertEqual(len(processed_docs_objects), 2)
+        found_large_doc = any(doc.meta_data.get('file_path') == "large_doc.txt" and doc.text == SAMPLE_FILE_CONTENT_LARGE for doc in processed_docs_objects)
+        found_normal_doc = any(doc.meta_data.get('file_path') == "normal_doc.txt" and doc.text == SAMPLE_FILE_CONTENT_NORMAL for doc in processed_docs_objects)
+        self.assertTrue(found_large_doc)
+        self.assertTrue(found_normal_doc)
+
+    @patch('api.data_pipeline.OllamaDocumentProcessor')
+    @patch('api.data_pipeline.ToEmbeddings')
+    @patch('api.data_pipeline.TextSplitter')
+    def test_behavior_with_json_default_false(self, MockTextSplitter, MockToEmbeddings, MockOllamaProcessor):
+        configs['fine_tuning_data_prep_default'] = False
+        MockTextSplitter.return_value = MagicMock(spec=configs["text_splitter"])
+        MockToEmbeddings.return_value = MagicMock()
+        MockOllamaProcessor.return_value = MagicMock()
+
+        db_manager = DatabaseManager()
+        db_manager.repo_paths = {
+            "save_repo_dir": TEST_REPO_PATH,
+            "save_db_file": TEST_DB_PATH
+        }
+        # Call prepare_db_index WITHOUT chunk_for_fine_tuning, relying on default from configs
+        processed_docs_objects = db_manager.prepare_db_index(local_ollama=False)
+
+        MockTextSplitter.assert_called_with(**configs["text_splitter"])
+        MockToEmbeddings.assert_called()
+        self.assertIn("split_and_embed", db_manager.db.transformers)
+        self.assertGreater(len(processed_docs_objects), 2)
+        large_doc_texts = [doc.text for doc in processed_docs_objects if doc.meta_data.get('file_path') == "large_doc.txt"]
+        self.assertTrue(any(len(text.split()) < len(SAMPLE_FILE_CONTENT_LARGE.split()) for text in large_doc_texts))
+
+    @patch('api.data_pipeline.OllamaDocumentProcessor')
+    @patch('api.data_pipeline.ToEmbeddings')
+    @patch('api.data_pipeline.TextSplitter')
+    def test_override_json_default_true_with_false_param(self, MockTextSplitter, MockToEmbeddings, MockOllamaProcessor):
+        configs['fine_tuning_data_prep_default'] = True # JSON default is TRUE
+        MockTextSplitter.return_value = MagicMock(spec=configs["text_splitter"])
+        MockToEmbeddings.return_value = MagicMock()
+        MockOllamaProcessor.return_value = MagicMock()
+
+        db_manager = DatabaseManager()
+        db_manager.repo_paths = {
+            "save_repo_dir": TEST_REPO_PATH,
+            "save_db_file": TEST_DB_PATH
+        }
+        # Override with chunk_for_fine_tuning=False parameter
+        processed_docs_objects = db_manager.prepare_db_index(local_ollama=False, chunk_for_fine_tuning=False)
+
+        MockTextSplitter.assert_called_with(**configs["text_splitter"])
+        MockToEmbeddings.assert_called()
+        self.assertIn("split_and_embed", db_manager.db.transformers)
+        self.assertGreater(len(processed_docs_objects), 2)
+        large_doc_texts = [doc.text for doc in processed_docs_objects if doc.meta_data.get('file_path') == "large_doc.txt"]
+        self.assertTrue(any(len(text.split()) < len(SAMPLE_FILE_CONTENT_LARGE.split()) for text in large_doc_texts))
+
+    @patch('api.data_pipeline.OllamaDocumentProcessor')
+    @patch('api.data_pipeline.ToEmbeddings')
+    @patch('api.data_pipeline.TextSplitter')
+    def test_override_json_default_false_with_true_param(self, MockTextSplitter, MockToEmbeddings, MockOllamaProcessor):
+        configs['fine_tuning_data_prep_default'] = False # JSON default is FALSE
+
+        db_manager = DatabaseManager()
+        db_manager.repo_paths = {
+            "save_repo_dir": TEST_REPO_PATH,
+            "save_db_file": TEST_DB_PATH
+        }
+        # Override with chunk_for_fine_tuning=True parameter
+        processed_docs_objects = db_manager.prepare_db_index(local_ollama=False, chunk_for_fine_tuning=True)
+
+        MockTextSplitter.assert_not_called()
+        MockToEmbeddings.assert_not_called()
+        MockOllamaProcessor.assert_not_called()
+        self.assertNotIn("split_and_embed", db_manager.db.transformers)
+        self.assertEqual(len(processed_docs_objects), 2)
+        found_large_doc = any(doc.meta_data.get('file_path') == "large_doc.txt" and doc.text == SAMPLE_FILE_CONTENT_LARGE for doc in processed_docs_objects)
+        found_normal_doc = any(doc.meta_data.get('file_path') == "normal_doc.txt" and doc.text == SAMPLE_FILE_CONTENT_NORMAL for doc in processed_docs_objects)
+        self.assertTrue(found_large_doc)
+        self.assertTrue(found_normal_doc)
 
 
 if __name__ == '__main__':

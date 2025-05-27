@@ -118,7 +118,7 @@ def download_repo(repo_url: str, local_path: str, type: str = "github", access_t
 download_github_repo = download_repo
 
 def read_all_documents(path: str, local_ollama: bool = False, excluded_dirs: List[str] = None, excluded_files: List[str] = None,
-                      included_dirs: List[str] = None, included_files: List[str] = None, chunk_for_fine_tuning: bool = False):
+                      included_dirs: List[str] = None, included_files: List[str] = None, chunk_for_fine_tuning: bool = configs.get('fine_tuning_data_prep_default', False)):
     """
     Recursively reads all documents in a directory and its subdirectories.
 
@@ -133,8 +133,8 @@ def read_all_documents(path: str, local_ollama: bool = False, excluded_dirs: Lis
             When provided, only files in these directories will be processed.
         included_files (List[str], optional): List of file patterns to include exclusively.
             When provided, only files matching these patterns will be processed.
-        chunk_for_fine_tuning (bool, optional): Whether to chunk documents for fine-tuning.
-            Default is False.
+        chunk_for_fine_tuning (bool, optional): Whether to prepare data for fine-tuning.
+            Defaults to the value of 'enable_fine_tuning_data_prep_default' in embedder.json (False if not set).
 
     Returns:
         list: A list of Document objects with metadata.
@@ -345,14 +345,15 @@ def read_all_documents(path: str, local_ollama: bool = False, excluded_dirs: Lis
     logger.info(f"Found {len(documents)} documents")
     return documents
 
-def prepare_data_pipeline(local_ollama: bool = False, chunk_for_fine_tuning: bool = False):
+def prepare_data_pipeline(local_ollama: bool = False, chunk_for_fine_tuning: bool = configs.get('fine_tuning_data_prep_default', False)):
     """
     Creates and returns the data transformation pipeline.
 
     Args:
         local_ollama (bool): Whether to use local Ollama for embedding (default: False)
-        chunk_for_fine_tuning (bool): Whether to prepare for fine-tuning (default: False).
-                                      If True, an empty pipeline is returned.
+        chunk_for_fine_tuning (bool, optional): Whether to prepare for fine-tuning.
+            Defaults to the value of 'enable_fine_tuning_data_prep_default' in embedder.json (False if not set).
+            If True, an empty pipeline is returned.
 
     Returns:
         adal.Sequential: The data transformation pipeline, or an empty one if chunk_for_fine_tuning is True.
@@ -385,7 +386,7 @@ def prepare_data_pipeline(local_ollama: bool = False, chunk_for_fine_tuning: boo
     return data_transformer
 
 def transform_documents_and_save_to_db(
-    documents: List[Document], db_path: str, local_ollama: bool = False, chunk_for_fine_tuning: bool = False
+    documents: List[Document], db_path: str, local_ollama: bool = False, chunk_for_fine_tuning: bool = configs.get('fine_tuning_data_prep_default', False)
 ) -> LocalDB:
     """
     Transforms a list of documents and saves them to a local database.
@@ -394,8 +395,9 @@ def transform_documents_and_save_to_db(
         documents (list): A list of `Document` objects.
         db_path (str): The path to the local database file.
         local_ollama (bool): Whether to use local Ollama for embedding (default: False)
-        chunk_for_fine_tuning (bool): Whether to save raw documents for fine-tuning (default: False).
-                                      If True, transformation is skipped.
+        chunk_for_fine_tuning (bool, optional): Whether to save raw documents for fine-tuning.
+            Defaults to the value of 'enable_fine_tuning_data_prep_default' in embedder.json (False if not set).
+            If True, transformation is skipped.
     """
     # Get the data transformer
     data_transformer = prepare_data_pipeline(local_ollama, chunk_for_fine_tuning)
@@ -661,7 +663,7 @@ class DatabaseManager:
 
     def prepare_database(self, repo_url_or_path: str, type: str = "github", access_token: str = None, local_ollama: bool = False,
                        excluded_dirs: List[str] = None, excluded_files: List[str] = None,
-                       included_dirs: List[str] = None, included_files: List[str] = None, chunk_for_fine_tuning: bool = False) -> List[Document]:
+                       included_dirs: List[str] = None, included_files: List[str] = None, chunk_for_fine_tuning: bool = configs.get('fine_tuning_data_prep_default', False)) -> List[Document]:
         """
         Create a new database from the repository.
 
@@ -673,7 +675,8 @@ class DatabaseManager:
             excluded_files (List[str], optional): List of file patterns to exclude from processing
             included_dirs (List[str], optional): List of directories to include exclusively
             included_files (List[str], optional): List of file patterns to include exclusively
-            chunk_for_fine_tuning (bool, optional): Whether to prepare data for fine-tuning. Default is False.
+            chunk_for_fine_tuning (bool, optional): Whether to prepare data for fine-tuning.
+                Defaults to the value of 'enable_fine_tuning_data_prep_default' in embedder.json (False if not set).
 
         Returns:
             List[Document]: List of Document objects
@@ -753,7 +756,7 @@ class DatabaseManager:
             raise
 
     def prepare_db_index(self, local_ollama: bool = False, excluded_dirs: List[str] = None, excluded_files: List[str] = None,
-                        included_dirs: List[str] = None, included_files: List[str] = None, chunk_for_fine_tuning: bool = False) -> List[Document]:
+                        included_dirs: List[str] = None, included_files: List[str] = None, chunk_for_fine_tuning: bool = configs.get('fine_tuning_data_prep_default', False)) -> List[Document]:
         """
         Prepare the indexed database for the repository.
 
@@ -763,7 +766,8 @@ class DatabaseManager:
             excluded_files (List[str], optional): List of file patterns to exclude from processing
             included_dirs (List[str], optional): List of directories to include exclusively
             included_files (List[str], optional): List of file patterns to include exclusively
-            chunk_for_fine_tuning (bool, optional): Whether to prepare data for fine-tuning. Default is False.
+            chunk_for_fine_tuning (bool, optional): Whether to prepare data for fine-tuning.
+                Defaults to the value of 'enable_fine_tuning_data_prep_default' in embedder.json (False if not set).
 
         Returns:
             List[Document]: List of Document objects
