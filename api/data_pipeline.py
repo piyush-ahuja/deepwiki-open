@@ -11,6 +11,7 @@ import re
 import glob
 from adalflow.utils import get_adalflow_default_root_path
 from adalflow.core.db import LocalDB
+from typing import Optional # Added import
 from api.config import configs, DEFAULT_EXCLUDED_DIRS, DEFAULT_EXCLUDED_FILES
 from api.ollama_patch import OllamaDocumentProcessor
 from urllib.parse import urlparse, urlunparse, quote
@@ -118,7 +119,7 @@ def download_repo(repo_url: str, local_path: str, type: str = "github", access_t
 download_github_repo = download_repo
 
 def read_all_documents(path: str, local_ollama: bool = False, excluded_dirs: List[str] = None, excluded_files: List[str] = None,
-                      included_dirs: List[str] = None, included_files: List[str] = None, chunk_for_fine_tuning: bool = configs.get('fine_tuning_data_prep_default', False)):
+                      included_dirs: List[str] = None, included_files: List[str] = None, chunk_for_fine_tuning: Optional[bool] = None):
     """
     Recursively reads all documents in a directory and its subdirectories.
 
@@ -139,6 +140,8 @@ def read_all_documents(path: str, local_ollama: bool = False, excluded_dirs: Lis
     Returns:
         list: A list of Document objects with metadata.
     """
+    if chunk_for_fine_tuning is None:
+        chunk_for_fine_tuning = configs.get('fine_tuning_data_prep_default', False)
     documents = []
     # File extensions to look for, prioritizing code files
     code_extensions = [".py", ".js", ".ts", ".java", ".cpp", ".c", ".h", ".hpp", ".go", ".rs",
@@ -345,7 +348,7 @@ def read_all_documents(path: str, local_ollama: bool = False, excluded_dirs: Lis
     logger.info(f"Found {len(documents)} documents")
     return documents
 
-def prepare_data_pipeline(local_ollama: bool = False, chunk_for_fine_tuning: bool = configs.get('fine_tuning_data_prep_default', False)):
+def prepare_data_pipeline(local_ollama: bool = False, chunk_for_fine_tuning: Optional[bool] = None):
     """
     Creates and returns the data transformation pipeline.
 
@@ -358,6 +361,8 @@ def prepare_data_pipeline(local_ollama: bool = False, chunk_for_fine_tuning: boo
     Returns:
         adal.Sequential: The data transformation pipeline, or an empty one if chunk_for_fine_tuning is True.
     """
+    if chunk_for_fine_tuning is None:
+        chunk_for_fine_tuning = configs.get('fine_tuning_data_prep_default', False)
     if chunk_for_fine_tuning:
         return adal.Sequential()  # Return an empty pipeline
 
@@ -386,7 +391,7 @@ def prepare_data_pipeline(local_ollama: bool = False, chunk_for_fine_tuning: boo
     return data_transformer
 
 def transform_documents_and_save_to_db(
-    documents: List[Document], db_path: str, local_ollama: bool = False, chunk_for_fine_tuning: bool = configs.get('fine_tuning_data_prep_default', False)
+    documents: List[Document], db_path: str, local_ollama: bool = False, chunk_for_fine_tuning: Optional[bool] = None
 ) -> LocalDB:
     """
     Transforms a list of documents and saves them to a local database.
@@ -399,6 +404,8 @@ def transform_documents_and_save_to_db(
             Defaults to the value of 'enable_fine_tuning_data_prep_default' in embedder.json (False if not set).
             If True, transformation is skipped.
     """
+    if chunk_for_fine_tuning is None:
+        chunk_for_fine_tuning = configs.get('fine_tuning_data_prep_default', False)
     # Get the data transformer
     data_transformer = prepare_data_pipeline(local_ollama, chunk_for_fine_tuning)
 
@@ -663,7 +670,7 @@ class DatabaseManager:
 
     def prepare_database(self, repo_url_or_path: str, type: str = "github", access_token: str = None, local_ollama: bool = False,
                        excluded_dirs: List[str] = None, excluded_files: List[str] = None,
-                       included_dirs: List[str] = None, included_files: List[str] = None, chunk_for_fine_tuning: bool = configs.get('fine_tuning_data_prep_default', False)) -> List[Document]:
+                       included_dirs: List[str] = None, included_files: List[str] = None, chunk_for_fine_tuning: Optional[bool] = None) -> List[Document]:
         """
         Create a new database from the repository.
 
@@ -681,6 +688,8 @@ class DatabaseManager:
         Returns:
             List[Document]: List of Document objects
         """
+        if chunk_for_fine_tuning is None:
+            chunk_for_fine_tuning = configs.get('fine_tuning_data_prep_default', False)
         self.reset_database()
         self._create_repo(repo_url_or_path, type, access_token)
         return self.prepare_db_index(local_ollama=local_ollama, excluded_dirs=excluded_dirs, excluded_files=excluded_files,
@@ -756,7 +765,7 @@ class DatabaseManager:
             raise
 
     def prepare_db_index(self, local_ollama: bool = False, excluded_dirs: List[str] = None, excluded_files: List[str] = None,
-                        included_dirs: List[str] = None, included_files: List[str] = None, chunk_for_fine_tuning: bool = configs.get('fine_tuning_data_prep_default', False)) -> List[Document]:
+                        included_dirs: List[str] = None, included_files: List[str] = None, chunk_for_fine_tuning: Optional[bool] = None) -> List[Document]:
         """
         Prepare the indexed database for the repository.
 
@@ -772,6 +781,8 @@ class DatabaseManager:
         Returns:
             List[Document]: List of Document objects
         """
+        if chunk_for_fine_tuning is None:
+            chunk_for_fine_tuning = configs.get('fine_tuning_data_prep_default', False)
         # check the database
         if self.repo_paths and os.path.exists(self.repo_paths["save_db_file"]):
             logger.info("Loading existing database...")
@@ -801,7 +812,7 @@ class DatabaseManager:
         )
         logger.info(f"Total documents: {len(documents)}")
         # If chunk_for_fine_tuning is True, transformed_docs will be the same as documents
-        # as transformation is skipped.
+        # as transformation is skipped. Otherwise, get the transformed data.
         transformed_docs = self.db.get_transformed_data(key="split_and_embed") if not chunk_for_fine_tuning else documents
         logger.info(f"Total transformed documents: {len(transformed_docs)}")
         return transformed_docs
