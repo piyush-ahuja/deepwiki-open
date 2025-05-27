@@ -293,7 +293,7 @@ class DatabaseManager:
 
     def prepare_database(self, repo_url_or_path: str, type: str = "github", access_token: str = None, local_ollama: bool = False,
                        excluded_dirs: List[str] = None, excluded_files: List[str] = None,
-                       included_dirs: List[str] = None, included_files: List[str] = None, chunk_for_fine_tuning: Optional[bool] = None) -> List[Document]:
+                       included_dirs: List[str] = None, included_files: List[str] = None, chunk_for_fine_tuning: Optional[bool] = None) -> tuple[List[Document], str]:
         chunk_for_fine_tuning = _get_effective_chunk_setting(chunk_for_fine_tuning)
         self.reset_database(); self._create_repo(repo_url_or_path, type, access_token)
         return self.prepare_db_index(local_ollama=local_ollama, excluded_dirs=excluded_dirs, excluded_files=excluded_files,
