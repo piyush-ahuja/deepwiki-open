@@ -108,7 +108,7 @@ def read_all_documents(path: str, local_ollama: bool = False, excluded_dirs: Lis
 
     def should_process_file(file_path: str, use_inclusion: bool, included_dirs: List[str], included_files: List[str],
                            excluded_dirs: List[str], excluded_files: List[str]) -> bool:
-        file_path_parts = os.path.normpath(file_path).split(os.sep)
+        #if not included_dirs and not included_files: is_included = True # This line seems to be dead code in inclusion mode
         file_name = os.path.basename(file_path)
         if use_inclusion:
             is_included = False
