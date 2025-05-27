@@ -91,9 +91,8 @@ def load_embedder_config():
             if class_name in CLIENT_CLASSES:
                 embedder_config[key]["model_client"] = CLIENT_CLASSES[class_name]
     
-    # Load the fine-tuning data prep default setting
-    # This is also set in the main config merging section for robustness
-    configs['fine_tuning_data_prep_default'] = embedder_config.get('enable_fine_tuning_data_prep_default', False)
+    # The fine-tuning data prep default setting is now exclusively handled
+    # in the main config merging section for robustness.
 
     return embedder_config
 
