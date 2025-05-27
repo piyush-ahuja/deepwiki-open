@@ -28,7 +28,7 @@ class StubComponent(Component):
         self.init_args = args
         self.init_kwargs = kwargs
 
-    def call(self, documents: list[Document], **kwargs) -> list[Document]:
+    def __call__(self, documents: list[Document], **kwargs) -> list[Document]:
         # DEBUG PRINT and counter removed
         return self.process_logic_mock(documents, **kwargs) # Ensure kwargs are passed
 

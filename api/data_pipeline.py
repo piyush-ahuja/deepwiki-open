@@ -22,6 +22,12 @@ logger = logging.getLogger(__name__)
 # Maximum token limit for OpenAI embedding models
 MAX_EMBEDDING_TOKENS = 8192
 
+def _get_effective_chunk_setting(param_value: Optional[bool]) -> bool:
+    """Resolves the effective chunk_for_fine_tuning setting."""
+    if param_value is None:
+        return configs.get('fine_tuning_data_prep_default', False)
+    return param_value
+
 def count_tokens(text: str, local_ollama: bool = False) -> int:
     """
     Count the number of tokens in a text string using tiktoken.
@@ -140,8 +146,7 @@ def read_all_documents(path: str, local_ollama: bool = False, excluded_dirs: Lis
     Returns:
         list: A list of Document objects with metadata.
     """
-    if chunk_for_fine_tuning is None:
-        chunk_for_fine_tuning = configs.get('fine_tuning_data_prep_default', False)
+    chunk_for_fine_tuning = _get_effective_chunk_setting(chunk_for_fine_tuning)
     documents = []
     # File extensions to look for, prioritizing code files
     code_extensions = [".py", ".js", ".ts", ".java", ".cpp", ".c", ".h", ".hpp", ".go", ".rs",
@@ -361,8 +366,7 @@ def prepare_data_pipeline(local_ollama: bool = False, chunk_for_fine_tuning: Opt
     Returns:
         adal.Sequential: The data transformation pipeline, or an empty one if chunk_for_fine_tuning is True.
     """
-    if chunk_for_fine_tuning is None:
-        chunk_for_fine_tuning = configs.get('fine_tuning_data_prep_default', False)
+    chunk_for_fine_tuning = _get_effective_chunk_setting(chunk_for_fine_tuning)
     if chunk_for_fine_tuning:
         return adal.Sequential()  # Return an empty pipeline
 
@@ -404,8 +408,7 @@ def transform_documents_and_save_to_db(
             Defaults to the value of 'enable_fine_tuning_data_prep_default' in embedder.json (False if not set).
             If True, transformation is skipped.
     """
-    if chunk_for_fine_tuning is None:
-        chunk_for_fine_tuning = configs.get('fine_tuning_data_prep_default', False)
+    chunk_for_fine_tuning = _get_effective_chunk_setting(chunk_for_fine_tuning)
     # Get the data transformer
     data_transformer = prepare_data_pipeline(local_ollama, chunk_for_fine_tuning)
 
@@ -688,8 +691,7 @@ class DatabaseManager:
         Returns:
             List[Document]: List of Document objects
         """
-        if chunk_for_fine_tuning is None:
-            chunk_for_fine_tuning = configs.get('fine_tuning_data_prep_default', False)
+        chunk_for_fine_tuning = _get_effective_chunk_setting(chunk_for_fine_tuning)
         self.reset_database()
         self._create_repo(repo_url_or_path, type, access_token)
         return self.prepare_db_index(local_ollama=local_ollama, excluded_dirs=excluded_dirs, excluded_files=excluded_files,
@@ -781,8 +783,7 @@ class DatabaseManager:
         Returns:
             List[Document]: List of Document objects
         """
-        if chunk_for_fine_tuning is None:
-            chunk_for_fine_tuning = configs.get('fine_tuning_data_prep_default', False)
+        chunk_for_fine_tuning = _get_effective_chunk_setting(chunk_for_fine_tuning)
         # check the database
         if self.repo_paths and os.path.exists(self.repo_paths["save_db_file"]):
             logger.info("Loading existing database...")
