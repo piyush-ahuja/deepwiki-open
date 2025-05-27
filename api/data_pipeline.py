@@ -814,8 +814,12 @@ class DatabaseManager:
         logger.info(f"Total documents: {len(documents)}")
         # If chunk_for_fine_tuning is True, transformed_docs will be the same as documents
         # as transformation is skipped. Otherwise, get the transformed data.
-        transformed_docs = self.db.get_transformed_data(key="split_and_embed") if not chunk_for_fine_tuning else documents
-        logger.info(f"Total transformed documents: {len(transformed_docs)}")
+        if not chunk_for_fine_tuning:
+            transformed_docs = self.db.get_transformed_data(key="split_and_embed")
+            logger.info(f"Total transformed documents: {len(transformed_docs)}")
+        else:
+            transformed_docs = documents # These are the raw documents from read_all_documents
+            logger.info(f"Total raw documents prepared for fine-tuning: {len(transformed_docs)}")
         return transformed_docs
 
     def prepare_retriever(self, repo_url_or_path: str, type: str = "github", access_token: str = None):
